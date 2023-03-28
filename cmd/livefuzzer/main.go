@@ -101,6 +101,8 @@ func initApp() *cli.App {
 var app = initApp()
 
 func main() {
+	log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+
 	// eth.sendTransaction({from:personal.listAccounts[0], to:"0xb02A2EdA1b317FBd16760128836B0Ac59B560e9D", value: "100000000000000"})
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -175,6 +177,10 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 		log.Warn("Could not get chainid, using default")
 		chainid = big.NewInt(0x01000666)
 	}
+	if chainid.Cmp(big.NewInt(888)) != 0 {
+		fmt.Printf("ivnalid chain ID %v\n", chainid)
+		panic("invalid chain ID")
+	}
 
 	var lastTx *types.Transaction
 	for i := uint64(0); i < N; i++ {
@@ -183,7 +189,13 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 			log.Warn("Could not get nonce: %v", nonce)
 			continue
 		}
-		tx, err := txfuzz.RandomValidTx(client, f, sender, nonce, nil, nil, al)
+		gp, err := SuggestGasPrice(context.Background(), backend)
+		if err != nil {
+			fmt.Printf("[WARN]: Could not get gas price: %v\n", err)
+			continue
+		}
+		//tx, err := txfuzz.RandomValidTx(client, f, sender, nonce, nil, nil, al)
+		tx, err := txfuzz.RandomValidTx(client, f, sender, nonce, gp, chainid, al)
 		if err != nil {
 			log.Warn("Could not create valid tx: %v", nonce)
 			continue
@@ -206,6 +218,16 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 			fmt.Printf("Wait mined failed: %v\n", err.Error())
 		}
 	}
+}
+
+var tip = big.NewInt(0x200)
+
+func SuggestGasPrice(ctx context.Context, client *ethclient.Client) (*big.Int, error) {
+	b, err := client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return new(big.Int).Add(b.BaseFee, tip), nil
 }
 
 func unstuckTransactions() {
@@ -279,12 +301,13 @@ func runSpam(c *cli.Context) error {
 	addrs = addrs[:10]
 
 	for {
-		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*1000000)), big.NewInt(params.GWei))
+		//airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*1000000)), big.NewInt(params.GWei))
+		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*100000)), big.NewInt(params.GWei))
 		if err := airdrop(airdropValue); err != nil {
 			return err
 		}
 		SpamTransactions(uint64(txPerAccount), false, !noAL, seed)
-		time.Sleep(12 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 }
 

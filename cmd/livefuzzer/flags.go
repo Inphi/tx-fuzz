@@ -10,9 +10,10 @@ var (
 	}
 
 	skFlag = &cli.StringFlag{
-		Name:  "sk",
-		Usage: "Secret key",
-		Value: "0xcdfbe6f7602f67a97602e3e9fc24cde1cdffa88acd47745c0b84c5ff55891e1b",
+		Name:    "sk",
+		Usage:   "Secret key",
+		Value:   "0xcdfbe6f7602f67a97602e3e9fc24cde1cdffa88acd47745c0b84c5ff55891e1b",
+		EnvVars: []string{"SECRET_KEY"},
 	}
 
 	corpusFlag = &cli.StringFlag{
