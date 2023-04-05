@@ -101,7 +101,7 @@ func initApp() *cli.App {
 var app = initApp()
 
 func main() {
-	log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	// eth.sendTransaction({from:personal.listAccounts[0], to:"0xb02A2EdA1b317FBd16760128836B0Ac59B560e9D", value: "100000000000000"})
 	if err := app.Run(os.Args); err != nil {
@@ -119,7 +119,7 @@ func SpamTransactions(N uint64, fromCorpus bool, accessList bool, seed int64) {
 	// Setup seed
 	var src *rand.Rand
 	if seed == 0 {
-		fmt.Println("No seed provided, creating one")
+		log.Info("No seed provided, creating one")
 		rnd := make([]byte, 8)
 		crand.Read(rnd)
 		s := int64(binary.BigEndian.Uint64(rnd))
@@ -129,6 +129,10 @@ func SpamTransactions(N uint64, fromCorpus bool, accessList bool, seed int64) {
 	mut := mutator.NewMutator(src)
 	// Set up the randomness
 	random := make([]byte, 10000)
+	_, err = src.Read(random)
+	if err != nil {
+		panic(err)
+	}
 	// Setup N
 	if N == 0 {
 		client := ethclient.NewClient(backend)
@@ -162,10 +166,61 @@ func SpamTransactions(N uint64, fromCorpus bool, accessList bool, seed int64) {
 		go func(key, addr string, filler *filler.Filler) {
 			defer wg.Done()
 			sk := crypto.ToECDSAUnsafe(common.FromHex(key))
-			SendBaikalTransactions(backend, sk, f, addr, N, accessList)
+			SendBaikalTransactions(backend, sk, filler, addr, N, accessList)
 		}(keys[i], addrs[i], f)
 	}
 	wg.Wait()
+}
+
+type Track struct {
+	sync.Mutex
+	numConfirmations int
+	sent             int
+	dataLen          int
+}
+
+var tracker = new(Track)
+
+func init() {
+	go func() {
+		start := time.Now()
+		for {
+			time.Sleep(10 * time.Second)
+			tracker.Lock()
+			dur := time.Since(start)
+			sendRate := float64(tracker.sent) / dur.Seconds()
+			writeRate := float64(tracker.numConfirmations) / dur.Seconds()
+			dataRate := float64(tracker.dataLen) / dur.Seconds()
+			log.Info("tracker metrics",
+				"confirmations", tracker.numConfirmations,
+				"sent", tracker.sent,
+				"sendRate", sendRate,
+				"writeRate", writeRate,
+				"dataLen", tracker.dataLen,
+				"bytes/sec", dataRate,
+			)
+			tracker.Unlock()
+		}
+	}()
+}
+
+func track(backend *ethclient.Client, tx *types.Transaction, sender string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 24*time.Second)
+		defer cancel()
+		var confirmed bool
+		if _, err := bind.WaitMined(ctx, backend, tx); err == nil {
+			confirmed = true
+		}
+
+		tracker.Lock()
+		defer tracker.Unlock()
+		if confirmed {
+			tracker.numConfirmations++
+			tracker.dataLen += len(tx.Data())
+		}
+		tracker.sent++
+	}()
 }
 
 func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler.Filler, addr string, N uint64, al bool) {
@@ -178,7 +233,6 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 		chainid = big.NewInt(0x01000666)
 	}
 	if chainid.Cmp(big.NewInt(888)) != 0 {
-		fmt.Printf("ivnalid chain ID %v\n", chainid)
 		panic("invalid chain ID")
 	}
 
@@ -191,13 +245,13 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 		}
 		gp, err := SuggestGasPrice(context.Background(), backend)
 		if err != nil {
-			fmt.Printf("[WARN]: Could not get gas price: %v\n", err)
+			log.Warn("Could not get gas price", "err", err)
 			continue
 		}
 		//tx, err := txfuzz.RandomValidTx(client, f, sender, nonce, nil, nil, al)
 		tx, err := txfuzz.RandomValidTx(client, f, sender, nonce, gp, chainid, al)
 		if err != nil {
-			log.Warn("Could not create valid tx: %v", nonce)
+			log.Warn("Could not create valid tx", "err", err)
 			continue
 		}
 		signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainid), key)
@@ -205,9 +259,10 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 			panic(err)
 		}
 		if err := backend.SendTransaction(context.Background(), signedTx); err != nil {
-			log.Warn("Could not submit transaction: %v", err)
+			log.Warn("Could not submit transaction", "err", err)
 			continue
 		}
+		track(backend, signedTx, addr)
 		lastTx = signedTx
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -215,7 +270,7 @@ func SendBaikalTransactions(client *rpc.Client, key *ecdsa.PrivateKey, f *filler
 		ctx, cancel := context.WithTimeout(context.Background(), 24*time.Second)
 		defer cancel()
 		if _, err := bind.WaitMined(ctx, backend, lastTx); err != nil {
-			fmt.Printf("Wait mined failed: %v\n", err.Error())
+			log.Warn("Wait mined failed", "hash", lastTx.Hash().String(), "nonce", lastTx.Nonce(), "from", addr, "err", err.Error())
 		}
 	}
 }
@@ -301,8 +356,7 @@ func runSpam(c *cli.Context) error {
 	addrs = addrs[:10]
 
 	for {
-		//airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*1000000)), big.NewInt(params.GWei))
-		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*100000)), big.NewInt(params.GWei))
+		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*1000000)), big.NewInt(params.GWei))
 		if err := airdrop(airdropValue); err != nil {
 			return err
 		}

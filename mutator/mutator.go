@@ -102,11 +102,12 @@ func (m *Mutator) MutateBytes(ptrB *[]byte) {
 		*ptrB = b
 	}()
 
-	for {
-		mut := byteSliceMutators[m.rand(len(byteSliceMutators))]
+	for i := 0; i < len(byteSliceMutators); i++ {
+		j := m.rand(len(byteSliceMutators))
+		mut := byteSliceMutators[j]
 		if mutated := mut(m, b); mutated != nil {
 			b = mutated
-			return
+			//return
 		}
 	}
 }

@@ -261,6 +261,15 @@ func airdrop(value *big.Int) error {
 			return err
 		}
 		to := common.HexToAddress(addr)
+		bal, err := backend.BalanceAt(context.Background(), to, nil)
+		if err != nil {
+			fmt.Printf("could not airdrop: %v\n", err)
+			return err
+		}
+		if bal.Cmp(value) >= 0 {
+			continue
+		}
+
 		gp, _ := backend.SuggestGasPrice(context.Background())
 		tx2 := types.NewTransaction(nonce, to, value, 21000, gp, nil)
 		signedTx, _ := types.SignTx(tx2, types.LatestSignerForChainID(chainid), sk)
@@ -269,6 +278,9 @@ func airdrop(value *big.Int) error {
 			return err
 		}
 		tx = signedTx
+	}
+	if tx == nil {
+		return nil
 	}
 	// Wait for the last transaction to be mined
 	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {

@@ -188,10 +188,9 @@ func SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 }
 
 func SuggestGasPrice(ctx context.Context, client *ethclient.Client) (*big.Int, error) {
-	b, err := client.BlockByNumber(ctx, nil)
+	h, err := client.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	fee := b.BaseFee()
-	return new(big.Int).Add(fee, tip), nil
+	return new(big.Int).Add(h.BaseFee, tip), nil
 }
