@@ -44,4 +44,10 @@ var (
 		Usage: "Number of transactions send per account per block, 0 = best estimate",
 		Value: 0,
 	}
+
+	numAccountsFlag = &cli.IntFlag{
+		Name:  "num-accounts",
+		Usage: "Number of accounts used for sends",
+		Value: 20,
+	}
 )

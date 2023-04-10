@@ -53,6 +53,7 @@ var spamCommand = &cli.Command{
 		corpusFlag,
 		rpcFlag,
 		txCountFlag,
+		numAccountsFlag,
 	},
 }
 
@@ -357,7 +358,7 @@ func send() {
 func runAirdrop(c *cli.Context) error {
 	setupDefaults(c)
 	txPerAccount := 10000
-	airdropValue := new(big.Int).Mul(big.NewInt(int64(txPerAccount*100000)), big.NewInt(params.GWei))
+	airdropValue := new(big.Int).Mul(big.NewInt(int64(txPerAccount*300000)), big.NewInt(params.GWei))
 	airdrop(airdropValue)
 	return nil
 }
@@ -376,8 +377,13 @@ func runSpam(c *cli.Context) error {
 		corpus = cp
 	}
 	// Limit amount of accounts
-	keys = keys[:60]
-	addrs = addrs[:60]
+	numAccounts := c.Int(numAccountsFlag.Name)
+	if numAccounts > len(keys) {
+		panic("invalid number of accounts")
+	}
+	log.Info("numAccounts", "value", numAccounts)
+	keys = keys[:numAccounts]
+	addrs = addrs[:numAccounts]
 
 	for {
 		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*9000000)), big.NewInt(params.GWei))
