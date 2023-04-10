@@ -128,7 +128,7 @@ func SpamTransactions(N uint64, fromCorpus bool, accessList bool, seed int64) {
 	src = rand.New(rand.NewSource(seed))
 	mut := mutator.NewMutator(src)
 	// Set up the randomness
-	random := make([]byte, 10000)
+	random := make([]byte, 1000)
 	_, err = src.Read(random)
 	if err != nil {
 		panic(err)
@@ -177,11 +177,22 @@ type Track struct {
 	numConfirmations int
 	sent             int
 	dataLen          int
+	txs              map[string][]*types.Transaction
 }
 
-var tracker = new(Track)
+var tracker = &Track{
+	txs: make(map[string][]*types.Transaction),
+}
+var outfile = "/tmp/nonces"
+var file *os.File
 
 func init() {
+	var err error
+	file, err = os.Create(outfile)
+	if err != nil {
+		panic(err)
+	}
+
 	go func() {
 		start := time.Now()
 		for {
@@ -204,7 +215,10 @@ func init() {
 	}()
 }
 
+var printDups bool = true
+
 func track(backend *ethclient.Client, tx *types.Transaction, sender string) {
+	file.WriteString(fmt.Sprintf("nonce=%v sender=%v\n", tx.Nonce(), sender))
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 24*time.Second)
 		defer cancel()
@@ -220,6 +234,16 @@ func track(backend *ethclient.Client, tx *types.Transaction, sender string) {
 			tracker.dataLen += len(tx.Data())
 		}
 		tracker.sent++
+		if printDups {
+			for _, x := range tracker.txs[sender] {
+				if x.Nonce() == tx.Nonce() {
+					a, _ := x.MarshalJSON()
+					b, _ := tx.MarshalJSON()
+					fmt.Printf("found dup: %v. %v\n", string(a), string(b))
+				}
+			}
+			tracker.txs[sender] = append(tracker.txs[sender], tx)
+		}
 	}()
 }
 
@@ -352,11 +376,11 @@ func runSpam(c *cli.Context) error {
 		corpus = cp
 	}
 	// Limit amount of accounts
-	keys = keys[:10]
-	addrs = addrs[:10]
+	keys = keys[:60]
+	addrs = addrs[:60]
 
 	for {
-		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*1000000)), big.NewInt(params.GWei))
+		airdropValue := new(big.Int).Mul(big.NewInt(int64((1+txPerAccount)*9000000)), big.NewInt(params.GWei))
 		if err := airdrop(airdropValue); err != nil {
 			return err
 		}

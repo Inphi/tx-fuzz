@@ -68,14 +68,16 @@ func byteSliceDuplicateBytes(m *Mutator, b []byte) []byte {
 
 // byteSliceOverwriteBytes overwrites a chunk of b with another chunk of b.
 func byteSliceOverwriteBytes(m *Mutator, b []byte) []byte {
-	if len(b) <= 1 {
+	if len(b) <= 2 {
 		return nil
 	}
-	src := m.rand(len(b))
-	dst := m.rand(len(b))
+	// TODO: bug handling here to prevent 0-valued expression
+	src := m.rand(len(b) - 1)
+	dst := m.rand(len(b) - 1)
 	for dst == src {
-		dst = m.rand(len(b))
+		dst = m.rand(len(b) - 1)
 	}
+	// TODO: bug here. expression can be 0.
 	n := m.chooseLen(len(b) - src - 1)
 	copy(b[dst:], b[src:src+n])
 	return b
@@ -276,13 +278,14 @@ func byteSliceShuffleBytes(m *Mutator, b []byte) []byte {
 
 // byteSliceSwapBytes swaps two chunks of bytes in b.
 func byteSliceSwapBytes(m *Mutator, b []byte) []byte {
-	if len(b) <= 1 {
+	// TODO: bug handling here to prevent 0-valued expression
+	if len(b) <= 2 {
 		return nil
 	}
-	src := m.rand(len(b))
-	dst := m.rand(len(b))
+	src := m.rand(len(b) - 1)
+	dst := m.rand(len(b) - 1)
 	for dst == src {
-		dst = m.rand(len(b))
+		dst = m.rand(len(b) - 1)
 	}
 	// Choose the random length as len(b) - max(src, dst)
 	// so that we don't attempt to swap a chunk that extends

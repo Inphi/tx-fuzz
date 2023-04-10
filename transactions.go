@@ -171,13 +171,14 @@ func getCaps(rpc *rpc.Client, defaultGasPrice *big.Int) (*big.Int, *big.Int, err
 		return big.NewInt(0), defaultGasPrice, nil
 	}
 	client := ethclient.NewClient(rpc)
-	//tip, err := client.SuggestGasTipCap(context.Background())
-	tip, err := SuggestGasTipCap(context.Background())
+	tip, err := client.SuggestGasTipCap(context.Background())
+	//tip, err := SuggestGasTipCap(context.Background())
 	if err != nil {
 		return nil, nil, err
 	}
-	//feeCap, err := client.SuggestGasPrice(context.Background())
-	feeCap, err := SuggestGasPrice(context.Background(), client)
+	tip = new(big.Int).Add(tip, big.NewInt(20))
+	feeCap, err := client.SuggestGasPrice(context.Background())
+	//feeCap, err := SuggestGasPrice(context.Background(), client)
 	return tip, feeCap, err
 }
 
