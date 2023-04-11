@@ -16,12 +16,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const (
-	EnabledFlagName    = "metrics.enabled"
-	ListenAddrFlagName = "metrics.addr"
-	PortFlagName       = "metrics.port"
-)
-
 var (
 	ns = "tx_fuzz_default"
 
