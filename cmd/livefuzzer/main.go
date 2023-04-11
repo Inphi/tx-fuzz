@@ -227,8 +227,13 @@ func track(backend *ethclient.Client, tx *types.Transaction, sender string) {
 		if _, err := bind.WaitMined(ctx, backend, tx); err == nil {
 			confirmed = true
 		}
-		DataBytesIn.Add(float64(len(tx.Data())))
-		TransactionCount.Inc()
+
+		DataBytes.Add(float64(len(tx.Data())))
+		TransactionTotal.Inc()
+		if confirmed {
+			DataBytesConfirmed.Add(float64(len(tx.Data())))
+			TransactionConfirmedTotal.Inc()
+		}
 
 		tracker.Lock()
 		defer tracker.Unlock()
