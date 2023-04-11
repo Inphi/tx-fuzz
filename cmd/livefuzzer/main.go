@@ -54,6 +54,11 @@ var spamCommand = &cli.Command{
 		rpcFlag,
 		txCountFlag,
 		numAccountsFlag,
+
+		// metrics flags
+		metricsEnabledFlag,
+		metricsListenAddrFlag,
+		metricsPortFlag,
 	},
 }
 
@@ -372,6 +377,15 @@ func runAirdrop(c *cli.Context) error {
 
 func runSpam(c *cli.Context) error {
 	setupDefaults(c)
+
+	if c.Bool(metricsEnabledFlag.Name) {
+		go func() {
+			if err := ListenAndServeMetrics(c.Context, c.String(metricsListenAddrFlag.Name), c.Int(metricsPortFlag.Name)); err != nil {
+				log.Error("error starting metrics server", err)
+			}
+		}()
+	}
+
 	noAL := c.Bool(noALFlag.Name)
 	seed := c.Int64(seedFlag.Name)
 	txPerAccount := c.Int(txCountFlag.Name)
